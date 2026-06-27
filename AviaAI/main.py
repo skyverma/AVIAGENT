@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from llm_service import critic_evaluate, final_answer, generate_code
+from llm_service import critic_evaluate, direct_answer, final_answer, generate_code
 from memory_service import retrieve_memory, store_memory
 from orchestrator import run_compiler_pipeline_sync
 
@@ -17,6 +17,13 @@ class GenerateRequest(BaseModel):
     critic_feedback: str = ""
     session_id: str = ""
     use_memory: bool = False
+    model: str = ""
+
+
+class DirectAnswerRequest(BaseModel):
+    prompt: str
+    context: str = ""
+    session_id: str = ""
     model: str = ""
 
 
@@ -55,6 +62,11 @@ def codegen(body: GenerateRequest):
     if body.use_memory and body.session_id:
         store_memory(body.session_id, f"Generated code for: {body.prompt[:200]}")
     return result
+
+
+@app.post("/direct-answer")
+def direct_ans(body: DirectAnswerRequest):
+    return direct_answer(body.prompt, context=body.context, model=body.model or None)
 
 
 @app.post("/python-compiler/critic-evaluate")

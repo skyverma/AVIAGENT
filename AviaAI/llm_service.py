@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Any, Optional
 
 import google.generativeai as genai
@@ -28,6 +29,38 @@ print(result)
 
 def _mock_final_answer(prompt: str, stdout: str) -> str:
     return f"## Quick Analysis\n\n**Question:** {prompt}\n\n**Findings:**\n\n```\n{stdout[:2000]}\n```\n"
+
+
+def direct_answer(
+    prompt: str,
+    context: str = "",
+    model: Optional[str] = None,
+) -> dict[str, Any]:
+    """Fast conversational path for Normal mode when no dataset is attached."""
+    if _use_mock():
+        return {
+            "final_answer": f"I can help with that. {prompt}",
+            "mode": "direct",
+            "model": "mock",
+            "chart_objects": [],
+        }
+    gmodel, preset = _get_model(model)
+    system = (
+        "You are AVIAGENT, a helpful agentic analytics assistant. "
+        "Answer directly and naturally. If the user asks for data analysis but has not "
+        "attached a dataset, ask them to attach a CSV, Excel, or Parquet file. "
+        "Do not invent dataset-specific numbers."
+    )
+    full_prompt = prompt
+    if context.strip():
+        full_prompt = f"Additional instruction:\n{context.strip()}\n\nUser message:\n{prompt}"
+    resp = gmodel.generate_content(f"{system}\n\n{full_prompt}")
+    return {
+        "final_answer": (resp.text or "").strip(),
+        "mode": "direct",
+        "model": preset.preset_id,
+        "chart_objects": [],
+    }
 
 
 def generate_code(
@@ -98,4 +131,54 @@ def final_answer(
         f"Write markdown insights for the user question using only execution output.\n"
         f"Question: {prompt}\nOutput:\n{logs}"
     )
-    return {"final_answer": (resp.text or "").strip(), "chart_objects": []}
+    charts: list[dict[str, Any]] = []
+    if chart_mode:
+        charts = generate_chart_objects(prompt, run_result, model=model)
+    return {"final_answer": (resp.text or "").strip(), "chart_objects": charts}
+
+
+def generate_chart_objects(
+    prompt: str,
+    run_result: dict,
+    model: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """Ask the model for small Recharts-friendly specs grounded in execution output."""
+    logs = str(run_result.get("logs", ""))[:12000]
+    previews = run_result.get("previews", {})
+    output_metadata = run_result.get("output_metadata", [])
+    if _use_mock():
+        if output_metadata:
+            first = output_metadata[0]
+            return [{
+                "type": "bar",
+                "title": "Output rows",
+                "data": [{"name": "rows", "value": first.get("rows", 0)}],
+            }]
+        return []
+    if not logs and not previews and not output_metadata:
+        return []
+    gmodel, _ = _get_model(model)
+    resp = gmodel.generate_content(
+        "Create up to 3 simple chart specs for the analysis output. "
+        "Return ONLY JSON array. Each object must have: type ('bar'|'line'|'pie'), "
+        "title, data (array of objects), xKey, yKey. Use small grounded data only. "
+        "If charts are not appropriate, return [].\n\n"
+        f"User question: {prompt}\n"
+        f"Execution logs:\n{logs}\n\n"
+        f"Output metadata JSON:\n{json.dumps(output_metadata, default=str)[:4000]}\n"
+        f"Previews JSON:\n{json.dumps(previews, default=str)[:8000]}"
+    )
+    text = (resp.text or "").strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    charts = [c for c in parsed if isinstance(c, dict) and isinstance(c.get("data"), list)]
+    return charts[:3]

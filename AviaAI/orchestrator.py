@@ -118,6 +118,9 @@ def run_compiler_pipeline_sync(
             "run_result": run_result,
             "final_answer": answer.get("final_answer", ""),
             "chart_objects": answer.get("chart_objects", []),
+            "output_objects": run_result.get("output_objects", []),
+            "output_metadata": run_result.get("output_metadata", []),
+            "previews": run_result.get("previews", {}),
             "cell_id": cell_id,
         }
 
