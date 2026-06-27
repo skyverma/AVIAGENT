@@ -10,6 +10,21 @@ import {
 } from '@/lib/llmConfig'
 import { cn } from '@/lib/utils'
 
+const PROVIDER_SHORT: Record<string, string> = {
+  huggingface: 'HF',
+  gemini: 'Gemini',
+  ollama: 'Ollama',
+  openai: 'OpenAI',
+  claude: 'Claude',
+}
+
+/** Strip trailing "(...)" qualifier and shorten common model ids for the closed dropdown. */
+function shortModel(label: string, id: string): string {
+  const base = label.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const tail = id.includes('/') ? id.split('/').pop()! : base
+  return base.length <= 22 ? base : tail
+}
+
 type Props = {
   value: LlmSelection
   onChange: (selection: LlmSelection) => void
@@ -48,37 +63,42 @@ export function LlmSelector({ value, onChange, compact = false, className }: Pro
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <div className={cn('flex items-center gap-1 rounded-full bg-slate-100 px-1 py-1', compact && 'text-[11px]')}>
-        <Sparkles className={cn('text-violet-500', compact ? 'ml-1 h-3 w-3' : 'ml-1.5 h-3.5 w-3.5')} />
-        <select
-          value={value.provider}
-          onChange={(e) => update({ provider: e.target.value })}
-          className="cursor-pointer bg-transparent pr-1 font-medium text-qm-navy focus:outline-none"
-          title="LLM Provider"
-        >
-          {catalog.providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}{p.is_free ? ' · free' : ''}
-            </option>
-          ))}
-        </select>
-        <span className="text-slate-300">|</span>
+      <div className={cn('flex items-center gap-0.5 rounded-full bg-slate-100 px-1 py-0.5', compact ? 'text-[10.5px]' : 'text-xs')}>
+        <Sparkles className={cn('shrink-0 text-violet-500', compact ? 'ml-1 h-3 w-3' : 'ml-1.5 h-3.5 w-3.5')} />
+        <div className="relative">
+          <select
+            value={value.provider}
+            onChange={(e) => update({ provider: e.target.value })}
+            className="max-w-[88px] cursor-pointer truncate rounded-full bg-transparent px-1 font-semibold text-qm-blue hover:bg-slate-200/60 focus:outline-none"
+            title="LLM Provider"
+          >
+            {catalog.providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {PROVIDER_SHORT[p.id] || p.label}{p.is_free ? ' · free' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="text-slate-300">·</span>
         <select
           value={value.model}
           onChange={(e) => update({ model: e.target.value })}
-          className="cursor-pointer bg-transparent pr-1 font-medium text-qm-navy focus:outline-none"
-          title="Model"
+          className="max-w-[140px] cursor-pointer truncate rounded-full bg-transparent px-1 font-medium text-qm-navy hover:bg-slate-200/60 focus:outline-none"
+          title={`Model: ${value.model}`}
         >
           {models.map((m) => (
-            <option key={m.id} value={m.id}>{m.label}</option>
+            <option key={m.id} value={m.id}>{shortModel(m.label, m.id)}</option>
           ))}
         </select>
         {needsKey && (
           <button
             type="button"
             onClick={() => setShowKey((v) => !v)}
-            className="mr-1 rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-qm-navy"
-            title="Add API key"
+            className={cn(
+              'mr-0.5 shrink-0 rounded-full p-1 transition-colors',
+              value.apiKey ? 'text-qm-green hover:bg-slate-200' : 'text-amber-500 hover:bg-amber-50',
+            )}
+            title={value.apiKey ? 'API key set' : 'Add API key'}
           >
             <KeyRound className={cn(compact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
           </button>

@@ -103,3 +103,8 @@ body {
 .chat-markdown pre code { background: transparent; padding: 0; }
 .chat-markdown table { font-size: 12.5px; border-collapse: collapse; }
 .chat-markdown th, .chat-markdown td { border: 1px solid #e2e8f0; padding: 0.3rem 0.5rem; }
+
+/* Notebook code cell gutter */
+.nb-cell-running {
+  animation: avatar-glow 1.8s ease-in-out infinite;
+}

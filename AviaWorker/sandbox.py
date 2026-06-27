@@ -127,7 +127,13 @@ def run_sandbox(execution: dict) -> dict[str, Any]:
             try:
                 import pandas as pd
                 df = pd.read_parquet(local_file)
-                previews[object_name] = df.head(20).to_dict(orient="records")
+                preview_df = df.head(200)
+                previews[object_name] = {
+                    "columns": [str(c) for c in df.columns],
+                    "rows": preview_df.astype(object).where(pd.notnull(preview_df), None).to_dict(orient="records"),
+                    "total_rows": int(len(df)),
+                    "preview_rows": int(len(preview_df)),
+                }
             except Exception:
                 pass
         return {

@@ -1,12 +1,15 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowUp,
   ChartBar,
   FileSpreadsheet,
   Loader2,
+  MessageSquarePlus,
   Paperclip,
+  Pencil,
   Sparkles,
+  Trash2,
   TrendingUp,
   Wand2,
   X,
@@ -42,7 +45,22 @@ type ChartObject = {
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string; mode?: 'direct' | 'compiler'; charts?: ChartObject[] }
 
+type Chat = { id: string; title: string; messages: ChatMsg[]; updatedAt: number }
+
 type AttachedFile = { object_name: string; label: string; rows: number; columns: number }
+
+const CHATS_KEY = 'avia-normal-chats'
+
+function loadChats(): Chat[] {
+  try {
+    const raw = localStorage.getItem(CHATS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
 
 const SUGGESTIONS = [
   { icon: ChartBar, label: 'Summarize dataset', prompt: 'Give me a clear summary of this dataset with key statistics.' },
@@ -59,6 +77,18 @@ function firstKey(row: Record<string, unknown>, fallback: string) {
 
 function numericKey(row: Record<string, unknown>, fallback: string) {
   return Object.keys(row).find((key) => typeof row[key] === 'number') || Object.keys(row)[1] || fallback
+}
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  if (day < 7) return `${day}d ago`
+  return new Date(ts).toLocaleDateString()
 }
 
 function ChartCard({ chart }: { chart: ChartObject }) {
@@ -109,13 +139,6 @@ function ChartCard({ chart }: { chart: ChartObject }) {
   )
 }
 
-const THINKING_PHRASES = [
-  'Thinking',
-  'Analyzing your request',
-  'Reasoning through it',
-  'Putting it together',
-]
-
 function ThinkingBubble({ hasFile }: { hasFile: boolean }) {
   return (
     <motion.div
@@ -135,7 +158,7 @@ function ThinkingBubble({ hasFile }: { hasFile: boolean }) {
           <span className="thinking-dot" />
         </div>
         <span className="shimmer-text text-xs font-medium">
-          {hasFile ? 'Running analysis pipeline' : THINKING_PHRASES[0]}…
+          {hasFile ? 'Running analysis pipeline' : 'Thinking'}…
         </span>
       </div>
     </motion.div>
@@ -150,11 +173,64 @@ export function NormalModePage() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [llm, setLlm] = useLlmSelection()
-  const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [chats, setChats] = useState<Chat[]>(loadChats)
+  const [currentId, setCurrentId] = useState<string>(() => loadChats()[0]?.id || crypto.randomUUID())
   const [loading, setLoading] = useState(false)
   const [steps, setSteps] = useState<PipelineStep[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+
+  const messages = chats.find((c) => c.id === currentId)?.messages ?? []
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHATS_KEY, JSON.stringify(chats))
+    } catch {
+      /* ignore */
+    }
+  }, [chats])
+
+  const setMessages = (updater: ChatMsg[] | ((prev: ChatMsg[]) => ChatMsg[])) => {
+    setChats((prev) => {
+      let list = prev
+      if (!prev.some((c) => c.id === currentId)) {
+        list = [{ id: currentId, title: 'New chat', messages: [], updatedAt: Date.now() }, ...prev]
+      }
+      return list.map((c) => {
+        if (c.id !== currentId) return c
+        const newMsgs = typeof updater === 'function' ? updater(c.messages) : updater
+        const firstUser = newMsgs.find((mm) => mm.role === 'user')
+        const title = c.title && c.title !== 'New chat'
+          ? c.title
+          : firstUser
+            ? firstUser.content.slice(0, 44)
+            : 'New chat'
+        return { ...c, messages: newMsgs, title, updatedAt: Date.now() }
+      })
+    })
+  }
+
+  const newChat = () => {
+    setCurrentId(crypto.randomUUID())
+    setInput('')
+    setFile(null)
+    setSteps([])
+  }
+
+  const selectChat = (id: string) => {
+    if (id === currentId) return
+    setCurrentId(id)
+    setSteps([])
+    setInput('')
+  }
+
+  const deleteChat = (id: string) => {
+    setChats((prev) => {
+      const next = prev.filter((c) => c.id !== id)
+      if (id === currentId) setCurrentId(next[0]?.id || crypto.randomUUID())
+      return next
+    })
+  }
 
   const uploadFile = async (f: File) => {
     setUploadError('')
@@ -257,6 +333,7 @@ export function NormalModePage() {
   }
 
   const isEmpty = messages.length === 0
+  const sortedChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt)
 
   const composer = (
     <div className="w-full">
@@ -315,7 +392,7 @@ export function NormalModePage() {
               accept=".csv,.txt,.xlsx,.xls,.parquet"
               onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
             />
-            <LlmSelector value={llm} onChange={setLlm} />
+            <LlmSelector value={llm} onChange={setLlm} compact />
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
@@ -342,109 +419,161 @@ export function NormalModePage() {
     </div>
   )
 
-  if (isEmpty) {
-    return (
-      <div className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center px-4">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-qm-blue/5 via-transparent to-transparent" />
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="relative z-10 w-full max-w-2xl"
-        >
-          <div className="mb-8 flex flex-col items-center text-center">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1, type: 'spring', stiffness: 200, damping: 15 }}
-              className="avatar-glow mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-qm-blue to-violet-500 shadow-lg"
-            >
-              <Sparkles className="h-5 w-5 text-white" />
-            </motion.div>
-            <h1 className="text-2xl font-semibold tracking-tight text-qm-navy">How can I help you today?</h1>
-            <p className="mt-1.5 text-[13px] text-slate-500">Quick Analysis — attach a dataset and ask anything.</p>
-          </div>
-          {composer}
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {SUGGESTIONS.map((s, i) => (
-              <motion.button
-                key={s.label}
-                type="button"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 + i * 0.06 }}
-                whileHover={{ y: -2 }}
-                onClick={() => analyze(s.prompt)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-qm-blue/40 hover:text-qm-navy hover:shadow"
-              >
-                <s.icon className="h-3.5 w-3.5 text-qm-blue" />
-                {s.label}
-              </motion.button>
-            ))}
-          </div>
-        </motion.div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex h-[calc(100vh-64px)] flex-col">
-      <div ref={viewportRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
-          {messages.map((m, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}
+    <div className="flex h-[calc(100vh-57px)] overflow-hidden">
+      {/* ── Chat history sidebar ── */}
+      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50/60">
+        <div className="p-3">
+          <button
+            type="button"
+            onClick={newChat}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-qm-blue px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-qm-blue/90"
+          >
+            <MessageSquarePlus className="h-4 w-4" />
+            New chat
+          </button>
+        </div>
+        <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Chat history
+        </div>
+        <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+          {sortedChats.length === 0 && (
+            <p className="px-2 py-3 text-center text-[11px] text-slate-400">No conversations yet</p>
+          )}
+          {sortedChats.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => selectChat(c.id)}
+              className={cn(
+                'group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors',
+                c.id === currentId ? 'bg-white shadow-sm ring-1 ring-slate-200' : 'hover:bg-white/70',
+              )}
             >
-              {m.role === 'user' ? (
-                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-qm-blue px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
-                  {m.content}
-                </div>
-              ) : (
-                <div className="flex max-w-[90%] gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-qm-blue to-violet-500">
-                    <Sparkles className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                    <div className="chat-markdown">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
-                    </div>
-                    {m.mode === 'compiler' && m.charts && m.charts.length > 0 && (
-                      <div className="mt-4 grid gap-3">
-                        {m.charts.map((chart, chartIndex) => (
-                          <ChartCard key={chartIndex} chart={chart} />
-                        ))}
+              <Pencil className={cn('h-3.5 w-3.5 shrink-0', c.id === currentId ? 'text-qm-blue' : 'text-slate-400')} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] font-medium text-qm-navy">{c.title || 'New chat'}</span>
+                <span className="block text-[10px] text-slate-400">{relativeTime(c.updatedAt)}</span>
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); deleteChat(c.id) } }}
+                className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                title="Delete chat"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </span>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      {/* ── Main chat area ── */}
+      <div className="flex min-w-0 flex-1 flex-col bg-qm-bg">
+        {isEmpty ? (
+          <div className="relative flex flex-1 flex-col items-center justify-center px-4">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-qm-blue/5 via-transparent to-transparent" />
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              className="relative z-10 w-full max-w-3xl"
+            >
+              <div className="mb-8 flex flex-col items-center text-center">
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1, type: 'spring', stiffness: 200, damping: 15 }}
+                  className="avatar-glow mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-qm-blue to-violet-500 shadow-lg"
+                >
+                  <Sparkles className="h-5 w-5 text-white" />
+                </motion.div>
+                <h1 className="text-2xl font-semibold tracking-tight text-qm-navy">How can I help you today?</h1>
+                <p className="mt-1.5 text-[13px] text-slate-500">Quick Analysis — attach a dataset and ask anything.</p>
+              </div>
+              {composer}
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                {SUGGESTIONS.map((s, i) => (
+                  <motion.button
+                    key={s.label}
+                    type="button"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25 + i * 0.06 }}
+                    whileHover={{ y: -2 }}
+                    onClick={() => analyze(s.prompt)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-qm-blue/40 hover:text-qm-navy hover:shadow"
+                  >
+                    <s.icon className="h-3.5 w-3.5 text-qm-blue" />
+                    {s.label}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        ) : (
+          <>
+            <div ref={viewportRef} className="flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-4xl space-y-5 px-6 py-6">
+                {messages.map((m, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}
+                  >
+                    {m.role === 'user' ? (
+                      <div className="max-w-[80%] rounded-2xl rounded-br-md bg-qm-blue px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
+                        {m.content}
+                      </div>
+                    ) : (
+                      <div className="flex max-w-[92%] gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-qm-blue to-violet-500">
+                          <Sparkles className="h-4 w-4 text-white" />
+                        </div>
+                        <div className="min-w-0 rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                          <div className="chat-markdown">
+                            <ReactMarkdown>{m.content}</ReactMarkdown>
+                          </div>
+                          {m.mode === 'compiler' && m.charts && m.charts.length > 0 && (
+                            <div className="mt-4 grid gap-3">
+                              {m.charts.map((chart, chartIndex) => (
+                                <ChartCard key={chartIndex} chart={chart} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          ))}
-          <AnimatePresence>
-            {loading && steps.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="mx-auto max-w-md"
-              >
-                <PipelineProgress steps={steps} />
-              </motion.div>
-            )}
-            {loading && steps.length === 0 && (
-              <div className="flex justify-start">
-                <ThinkingBubble hasFile={Boolean(file?.object_name)} />
+                  </motion.div>
+                ))}
+                <AnimatePresence>
+                  {loading && steps.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="mx-auto max-w-md"
+                    >
+                      <PipelineProgress steps={steps} />
+                    </motion.div>
+                  )}
+                  {loading && steps.length === 0 && (
+                    <div className="flex justify-start">
+                      <ThinkingBubble hasFile={Boolean(file?.object_name)} />
+                    </div>
+                  )}
+                </AnimatePresence>
               </div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-      <div className="border-t border-slate-200 bg-qm-bg/80 px-4 py-3 backdrop-blur">
-        <div className="mx-auto max-w-3xl">{composer}</div>
+            </div>
+            <div className="border-t border-slate-200 bg-qm-bg/80 px-6 py-3 backdrop-blur">
+              <div className="mx-auto max-w-4xl">{composer}</div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
