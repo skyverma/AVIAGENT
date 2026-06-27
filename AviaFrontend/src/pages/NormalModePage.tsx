@@ -27,7 +27,8 @@ import {
   YAxis,
 } from 'recharts'
 import { API, apiFetch } from '@/lib/api'
-import { GEMINI_MODELS, readGeminiModel, writeGeminiModel } from '@/lib/geminiModel'
+import { llmPayload } from '@/lib/llmConfig'
+import { LlmSelector, useLlmSelection } from '@/components/LlmSelector'
 import { PipelineProgress, type PipelineStep } from '@/components/PipelineProgress'
 import { cn } from '@/lib/utils'
 
@@ -148,17 +149,12 @@ export function NormalModePage() {
   const [file, setFile] = useState<AttachedFile | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [model, setModel] = useState(readGeminiModel)
+  const [llm, setLlm] = useLlmSelection()
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [loading, setLoading] = useState(false)
   const [steps, setSteps] = useState<PipelineStep[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
-
-  const onModelChange = (id: string) => {
-    setModel(id)
-    writeGeminiModel(id)
-  }
 
   const uploadFile = async (f: File) => {
     setUploadError('')
@@ -207,7 +203,7 @@ export function NormalModePage() {
           user_prompt: prompt,
           agent_instruction: agentInstruction,
           dataframe_path: file?.object_name || '',
-          model,
+          ...llmPayload(llm),
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -319,19 +315,7 @@ export function NormalModePage() {
               accept=".csv,.txt,.xlsx,.xls,.parquet"
               onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
             />
-            <div className="flex items-center gap-1 rounded-full bg-slate-100 px-1 py-1">
-              <Sparkles className="ml-1.5 h-3.5 w-3.5 text-violet-500" />
-              <select
-                value={model}
-                onChange={(e) => onModelChange(e.target.value)}
-                className="cursor-pointer bg-transparent pr-1 text-xs font-medium text-qm-navy focus:outline-none"
-                title="Model"
-              >
-                {GEMINI_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-            </div>
+            <LlmSelector value={llm} onChange={setLlm} />
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}

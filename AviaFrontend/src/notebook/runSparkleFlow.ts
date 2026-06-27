@@ -1,5 +1,5 @@
-import { API, AI_API, apiFetch } from '@/lib/api'
-import { readGeminiModel } from '@/lib/geminiModel'
+import { AI_API, API, apiFetch } from '@/lib/api'
+import { llmPayload, readLlmSelection, type LlmSelection } from '@/lib/llmConfig'
 import type { PythonCompilerGenerationEntry } from './types'
 
 const MAX_CRITIC = 4
@@ -18,9 +18,10 @@ export async function runSparkleFlow(
   prompt: string,
   inputObjects: string[],
   onStep?: (phase: string, status: string) => void,
-  model?: string,
+  llm?: LlmSelection,
 ): Promise<PythonCompilerGenerationEntry> {
-  const geminiModel = model || readGeminiModel()
+  const selection = llm || readLlmSelection()
+  const llmFields = llmPayload(selection)
   const cellId = crypto.randomUUID()
   let criticFeedback = ''
   let code = ''
@@ -30,7 +31,13 @@ export async function runSparkleFlow(
     const genRes = await apiFetch(`${AI_API}/python-compiler/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, critic_feedback: criticFeedback, use_memory: true, session_id: cellId, model: geminiModel }),
+      body: JSON.stringify({
+        prompt,
+        critic_feedback: criticFeedback,
+        use_memory: true,
+        session_id: cellId,
+        ...llmFields,
+      }),
     })
     const gen = await genRes.json()
     code = gen.code || ''
@@ -48,7 +55,7 @@ export async function runSparkleFlow(
     const criticRes = await apiFetch(`${API}/python-compiler/critic-evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, run_result: runResult, prompt, model: geminiModel }),
+      body: JSON.stringify({ code, run_result: runResult, prompt, ...llmFields }),
     })
     const critic = await criticRes.json()
     onStep?.('critic', 'completed')
@@ -59,7 +66,7 @@ export async function runSparkleFlow(
   const faRes = await apiFetch(`${API}/python-compiler/final-answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, run_result: runResult, model: geminiModel }),
+    body: JSON.stringify({ prompt, run_result: runResult, ...llmFields }),
   })
   const fa = await faRes.json()
   onStep?.('final_answer', 'completed')

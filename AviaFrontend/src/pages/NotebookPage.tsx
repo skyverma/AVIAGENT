@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import type { CellResultView, NotebookSettings, PythonCompilerGenerationEntry } from '@/notebook/types'
 import { runSparkleFlow } from '@/notebook/runSparkleFlow'
 import { API, apiFetch } from '@/lib/api'
-import { GEMINI_MODELS, readGeminiModel, writeGeminiModel } from '@/lib/geminiModel'
+import { LlmSelector, useLlmSelection } from '@/components/LlmSelector'
 
 const TABS: { id: CellResultView; label: string }[] = [
   { id: 'insights', label: 'Insights' },
@@ -19,7 +19,7 @@ const TABS: { id: CellResultView; label: string }[] = [
 type ChatMsg = { id: string; role: 'user' | 'assistant'; content: string; cellId?: string }
 
 export function NotebookPage() {
-  const [geminiModel, setGeminiModel] = useState(readGeminiModel)
+  const [llm, setLlm] = useLlmSelection()
   const sessionId = useRef(crypto.randomUUID()).current
   const [history, setHistory] = useState<PythonCompilerGenerationEntry[]>([])
   const [messages, setMessages] = useState<ChatMsg[]>([])
@@ -57,7 +57,7 @@ export function NotebookPage() {
     try {
       const entry = await runSparkleFlow(prompt, dataframe ? [dataframe] : [], (phase: string, status: string) => {
         setLivePhase(`${phase}: ${status}`)
-      }, geminiModel)
+      }, llm)
       entry.cellNumber = history.length + 1
       const next = [...history, entry]
       setHistory(next)
@@ -82,19 +82,7 @@ export function NotebookPage() {
           <div className="flex items-center gap-2 text-sm font-semibold text-qm-navy">
             <Sparkles className="h-4 w-4 text-violet-500" /> Trinity Notebook AI
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-white px-2 py-1 shadow-sm">
-            <Sparkles className="h-3 w-3 text-violet-500" />
-            <select
-              value={geminiModel}
-              onChange={(e) => { setGeminiModel(e.target.value); writeGeminiModel(e.target.value) }}
-              className="cursor-pointer bg-transparent text-[11px] font-medium text-qm-navy focus:outline-none"
-              title="Model"
-            >
-              {GEMINI_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
-          </div>
+          <LlmSelector value={llm} onChange={setLlm} compact />
         </div>
         <div className="mb-2">
           <input
