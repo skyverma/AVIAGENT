@@ -19,7 +19,9 @@ class AnalyzeRequest(BaseModel):
     dataframe_path: str = ""
     project_slug: str = "default"
     session_id: str = ""
+    provider: str = ""
     model: str = ""
+    api_key: str = ""
 
 
 async def _sse_event(data: dict) -> str:
@@ -35,18 +37,35 @@ async def analyze(body: AnalyzeRequest, ctx: TenantContext = Depends(get_tenant_
         dataframe_path = body.dataframe_path.strip()
 
         if not dataframe_path:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                resp = await client.post(
-                    f"{settings.ai_service_url}/direct-answer",
-                    json={
-                        "prompt": body.user_prompt,
-                        "context": body.agent_instruction,
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    resp = await client.post(
+                        f"{settings.ai_service_url}/direct-answer",
+                        json={
+                            "prompt": body.user_prompt,
+                            "context": body.agent_instruction,
+                            "session_id": session_id,
+                            "provider": body.provider or "huggingface",
+                            "model": body.model,
+                            "api_key": body.api_key,
+                        },
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+            except Exception as exc:
+                yield await _sse_event({
+                    "type": "complete",
+                    "result": {
                         "session_id": session_id,
+                        "mode": "direct",
+                        "steps": [],
+                        "final_answer": f"LLM error: {exc}",
+                        "provider": body.provider or "huggingface",
                         "model": body.model,
+                        "chart_objects": [],
                     },
-                )
-                resp.raise_for_status()
-                result = resp.json()
+                })
+                return
             result.update({"session_id": session_id, "mode": "direct", "steps": []})
             yield await _sse_event({"type": "complete", "result": result})
             return
@@ -65,7 +84,9 @@ async def analyze(body: AnalyzeRequest, ctx: TenantContext = Depends(get_tenant_
             "project_slug": body.project_slug,
             "user_id": ctx.user_id,
             "task_type": "quick_analysis",
+            "provider": body.provider,
             "model": body.model,
+            "api_key": body.api_key,
         }
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(f"{settings.ai_service_url}/orchestrator/run", json=payload)

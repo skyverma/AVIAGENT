@@ -3,10 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Code2, FileSpreadsheet, Loader2, Paperclip, Plus, Send, Sparkles, Type, X,
 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
+import { MarkdownView } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
 import { API, apiFetch } from '@/lib/api'
-import { GEMINI_MODELS, readGeminiModel, writeGeminiModel } from '@/lib/geminiModel'
+import { LlmSelector, useLlmSelection } from '@/components/LlmSelector'
 import { CellInsertZone } from '@/notebook/CellInsertZone'
 import {
   createCell, deleteCellAt, insertCellAfter, renumberCells, updateCell,
@@ -42,7 +42,7 @@ export function NotebookPage() {
   const chatRef = useRef<HTMLDivElement>(null)
   const notebookRef = useRef<HTMLDivElement>(null)
 
-  const [geminiModel, setGeminiModel] = useState(readGeminiModel)
+  const [llm, setLlm] = useLlmSelection()
   const [cells, setCells] = useState<Cell[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [aiTargetCellId, setAiTargetCellId] = useState<string | null>(null)
@@ -228,7 +228,7 @@ export function NotebookPage() {
             scrollChat()
           }
         },
-        geminiModel,
+        llm,
         placeholderId!,
       )
       const cellNum = workingCells.find((c) => c.cellId === placeholderId)?.cellNumber || workingCells.length
@@ -278,16 +278,7 @@ export function NotebookPage() {
             <Sparkles className="h-4 w-4 text-violet-500" />
             Notebook AI
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-white px-2 py-1 shadow-sm border border-slate-100">
-            <Sparkles className="h-3 w-3 text-violet-500" />
-            <select
-              value={geminiModel}
-              onChange={(e) => { setGeminiModel(e.target.value); writeGeminiModel(e.target.value) }}
-              className="cursor-pointer bg-transparent text-[10px] font-medium text-qm-navy focus:outline-none"
-            >
-              {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </div>
+          <LlmSelector value={llm} onChange={setLlm} compact />
         </div>
 
         {/* Dataframe attach */}
@@ -344,9 +335,7 @@ export function NotebookPage() {
                         <p className="mt-1 text-[12.5px] leading-relaxed text-slate-700">{m.content}</p>
                       </div>
                     ) : (
-                      <div className="chat-markdown">
-                        <ReactMarkdown>{m.content}</ReactMarkdown>
-                      </div>
+                      <MarkdownView>{m.content}</MarkdownView>
                     )}
                     {m.cellId && (
                       <button

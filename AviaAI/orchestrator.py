@@ -29,10 +29,19 @@ async def _run_and_wait(code: str, dataframe_path: str, client_slug: str, projec
             headers={"X-Avia-Internal": "1", "X-Client-Slug": client_slug},
         )
         if run_resp.status_code == 401:
-            # Fallback: enqueue via worker path without auth in orchestrator context
             return {"status": "failed", "logs": "Auth required for execution", "error": {"message": "auth"}}
-        data = run_resp.json()
-        execution_id = data["execution_id"]
+        try:
+            data = run_resp.json()
+        except Exception:
+            data = {}
+        execution_id = data.get("execution_id")
+        if not execution_id:
+            detail = data.get("detail") or run_resp.text or "Unknown execution error"
+            return {
+                "status": "failed",
+                "logs": f"Execution request failed ({run_resp.status_code}): {detail}",
+                "error": {"message": str(detail)},
+            }
         for _ in range(400):
             status_resp = await client.get(
                 f"{API_SERVICE_URL}/api/python-compiler/executions/{execution_id}",
@@ -56,7 +65,9 @@ def run_compiler_pipeline_sync(
     project_slug: str = "default",
     use_compiler_qdrant_memory: bool = False,
     on_step: Optional[Callable[[dict], None]] = None,
+    provider: Optional[str] = None,
     model: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> dict[str, Any]:
     import asyncio
 
@@ -78,7 +89,14 @@ def run_compiler_pipeline_sync(
             steps.append(step)
             if on_step:
                 on_step(step)
-            gen = generate_code(user_prompt, context=context, critic_feedback=critic_feedback, model=model)
+            gen = generate_code(
+                user_prompt,
+                context=context,
+                critic_feedback=critic_feedback,
+                provider=provider,
+                model=model,
+                api_key=api_key,
+            )
             code = gen["code"]
             step["status"] = "completed"
             if on_step:
@@ -95,7 +113,10 @@ def run_compiler_pipeline_sync(
             steps.append(step)
             if on_step:
                 on_step(step)
-            critic = critic_evaluate(code, run_result, user_prompt, model=model)
+            critic = critic_evaluate(
+                code, run_result, user_prompt,
+                provider=provider, model=model, api_key=api_key,
+            )
             step["status"] = "completed"
             if on_step:
                 on_step(step)
@@ -106,7 +127,10 @@ def run_compiler_pipeline_sync(
         steps.append(step)
         if on_step:
             on_step(step)
-        answer = final_answer(user_prompt, run_result, model=model)
+        answer = final_answer(
+            user_prompt, run_result,
+            provider=provider, model=model, api_key=api_key,
+        )
         step["status"] = "completed"
         if on_step:
             on_step(step)
