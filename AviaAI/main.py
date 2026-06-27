@@ -55,12 +55,18 @@ def list_gemini_models():
 def codegen(body: GenerateRequest):
     ctx = body.context
     if body.use_memory and body.session_id:
-        mem = retrieve_memory(body.session_id, body.prompt)
-        if mem:
-            ctx = (ctx + "\n" + "\n".join(mem)).strip()
+        try:
+            mem = retrieve_memory(body.session_id, body.prompt)
+            if mem:
+                ctx = (ctx + "\n" + "\n".join(mem)).strip()
+        except Exception:
+            pass
     result = generate_code(body.prompt, context=ctx, critic_feedback=body.critic_feedback, model=body.model or None)
     if body.use_memory and body.session_id:
-        store_memory(body.session_id, f"Generated code for: {body.prompt[:200]}")
+        try:
+            store_memory(body.session_id, f"Generated code for: {body.prompt[:200]}")
+        except Exception:
+            pass
     return result
 
 

@@ -1,40 +1,43 @@
-import { API, AI_API, apiFetch } from '@/lib/api'
+import { AI_API, API, apiFetch } from '@/lib/api'
 import { readGeminiModel } from '@/lib/geminiModel'
-import type { PythonCompilerGenerationEntry } from './types'
+import { pollExecution } from './pollExecution'
+import type { NotebookCell } from './types'
 
 const MAX_CRITIC = 4
-
-async function pollExecution(executionId: string) {
-  for (let i = 0; i < 400; i++) {
-    const res = await apiFetch(`${API}/python-compiler/executions/${executionId}`)
-    const data = await res.json()
-    if (data.status === 'completed' || data.status === 'failed') return data
-    await new Promise((r) => setTimeout(r, 800))
-  }
-  throw new Error('Execution timeout')
-}
 
 export async function runSparkleFlow(
   prompt: string,
   inputObjects: string[],
-  onStep?: (phase: string, status: string) => void,
+  onStep?: (phase: string, status: string, detail?: Record<string, unknown>) => void,
   model?: string,
-): Promise<PythonCompilerGenerationEntry> {
+  targetCellId?: string,
+): Promise<NotebookCell> {
   const geminiModel = model || readGeminiModel()
-  const cellId = crypto.randomUUID()
+  const cellId = targetCellId || crypto.randomUUID()
   let criticFeedback = ''
   let code = ''
+  let reasoning = ''
+  let codeExplanation = ''
   let runResult: Record<string, unknown> = {}
+  let executionId = ''
   for (let attempt = 1; attempt <= MAX_CRITIC; attempt++) {
     onStep?.('codegen', 'running')
     const genRes = await apiFetch(`${AI_API}/python-compiler/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, critic_feedback: criticFeedback, use_memory: true, session_id: cellId, model: geminiModel }),
+      body: JSON.stringify({
+        prompt,
+        critic_feedback: criticFeedback,
+        use_memory: true,
+        session_id: cellId,
+        model: geminiModel,
+      }),
     })
     const gen = await genRes.json()
     code = gen.code || ''
-    onStep?.('codegen', 'completed')
+    reasoning = gen.reasoning || reasoning
+    codeExplanation = gen.code_explanation || gen.explanation || codeExplanation
+    onStep?.('codegen', 'completed', { reasoning, code_explanation: codeExplanation, code })
     onStep?.('run', 'running')
     const runRes = await apiFetch(`${API}/python-compiler/run`, {
       method: 'POST',
@@ -42,6 +45,7 @@ export async function runSparkleFlow(
       body: JSON.stringify({ code, input_objects: inputObjects, cell_id: cellId }),
     })
     const { execution_id } = await runRes.json()
+    executionId = execution_id
     runResult = await pollExecution(execution_id)
     onStep?.('run', runResult.status as string)
     onStep?.('critic', 'running')
@@ -66,12 +70,17 @@ export async function runSparkleFlow(
   return {
     cellId,
     cellNumber: 0,
+    cellType: 'code',
     prompt,
     code,
+    reasoning,
+    codeExplanation,
     runResult,
     finalAnswer: fa.final_answer,
     chartObjects: fa.chart_objects,
-    executionId: runResult.execution_id as string | undefined,
+    executionId: (runResult.execution_id as string | undefined) || executionId,
     messageId: cellId,
+    status: runResult.status === 'completed' ? 'completed' : 'failed',
+    timestamp: Date.now(),
   }
 }
