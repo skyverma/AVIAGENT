@@ -1,0 +1,19 @@
+{
+  "name": "aviamobile",
+  "version": "0.1.0",
+  "description": "AviaAgent mobile shell (Capacitor)",
+  "private": true,
+  "scripts": {
+    "sync": "npx cap sync android",
+    "open:android": "npx cap open android",
+    "run:android": "npx cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/core": "^7.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.2.0",
+    "typescript": "^5.8.2"
+  }
+}
