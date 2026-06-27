@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-qm-yellow: #ffbd59;
+  --color-qm-green: #41c185;
+  --color-qm-blue: #458ee2;
+  --color-qm-navy: #2c3e50;
+  --color-qm-bg: #f5f7fa;
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-qm-bg);
+  color: #333;
+  min-height: 100vh;
+}
+
+#root { min-height: 100vh; }
+
+@keyframes pipeline-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes pipeline-step-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(69, 142, 226, 0.25); }
+  50% { box-shadow: 0 0 0 4px rgba(69, 142, 226, 0.08); }
+}
+.pipeline-progress-fill {
+  background: linear-gradient(90deg, var(--color-qm-blue) 0%, var(--color-qm-green) 45%, #5ec9e8 55%, var(--color-qm-green) 100%);
+  background-size: 200% 100%;
+  animation: pipeline-shimmer 2s ease-in-out infinite;
+}
+.pipeline-step-active {
+  animation: pipeline-step-pulse 1.8s ease-in-out infinite;
+}
+
+.avia-cell {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.chat-user { background: #3B82F6; color: white; }
+.chat-assistant { background: white; border: 1px solid #e2e8f0; }
