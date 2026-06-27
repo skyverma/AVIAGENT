@@ -1,5 +1,5 @@
 import { AI_API, API, apiFetch } from '@/lib/api'
-import { readGeminiModel } from '@/lib/geminiModel'
+import { llmPayload, readLlmSelection, type LlmSelection } from '@/lib/llmConfig'
 import { pollExecution } from './pollExecution'
 import type { NotebookCell } from './types'
 
@@ -9,10 +9,10 @@ export async function runSparkleFlow(
   prompt: string,
   inputObjects: string[],
   onStep?: (phase: string, status: string, detail?: Record<string, unknown>) => void,
-  model?: string,
+  llm?: LlmSelection,
   targetCellId?: string,
 ): Promise<NotebookCell> {
-  const geminiModel = model || readGeminiModel()
+  const llmFields = llmPayload(llm || readLlmSelection())
   const cellId = targetCellId || crypto.randomUUID()
   let criticFeedback = ''
   let code = ''
@@ -30,7 +30,7 @@ export async function runSparkleFlow(
         critic_feedback: criticFeedback,
         use_memory: true,
         session_id: cellId,
-        model: geminiModel,
+        ...llmFields,
       }),
     })
     const gen = await genRes.json()
@@ -52,7 +52,7 @@ export async function runSparkleFlow(
     const criticRes = await apiFetch(`${API}/python-compiler/critic-evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, run_result: runResult, prompt, model: geminiModel }),
+      body: JSON.stringify({ code, run_result: runResult, prompt, ...llmFields }),
     })
     const critic = await criticRes.json()
     onStep?.('critic', 'completed')
@@ -63,7 +63,7 @@ export async function runSparkleFlow(
   const faRes = await apiFetch(`${API}/python-compiler/final-answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, run_result: runResult, model: geminiModel }),
+    body: JSON.stringify({ prompt, run_result: runResult, ...llmFields }),
   })
   const fa = await faRes.json()
   onStep?.('final_answer', 'completed')

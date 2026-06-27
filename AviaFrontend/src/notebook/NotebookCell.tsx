@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import {
   ChevronDown, ChevronRight, Loader2, Play, Sparkles, Trash2,
 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
 import { cn } from '@/lib/utils'
+import { MarkdownView } from '@/lib/markdown'
 import { NotebookChart } from './NotebookChart'
 import { DataFrameTable, type DataFramePreview } from './DataFrameTable'
 import type { CellResultView, ChartObject, NotebookCell } from './types'
@@ -82,8 +82,8 @@ export function NotebookCell({
           />
         )}
         {!cell.collapsed && cell.markdown && (
-          <div className="border-t border-slate-100 p-4 chat-markdown">
-            <ReactMarkdown>{cell.markdown}</ReactMarkdown>
+          <div className="border-t border-slate-100 p-4">
+            <MarkdownView>{cell.markdown || ''}</MarkdownView>
           </div>
         )}
       </div>
@@ -183,15 +183,15 @@ export function NotebookCell({
             )}
 
             {view === 'insights' && (
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto bg-white p-4">
                 <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Insights</span>
-                <div className="chat-markdown">
-                  {busy ? (
-                    <span className="shimmer-text text-xs font-medium">Generating insights…</span>
-                  ) : (
-                    <ReactMarkdown>{cell.finalAnswer || '_Run the cell or ask AI to generate insights._'}</ReactMarkdown>
-                  )}
-                </div>
+                {busy ? (
+                  <span className="shimmer-text text-xs font-medium">Generating insights…</span>
+                ) : (
+                  <MarkdownView emptyFallback="_Run the cell or ask AI to generate insights._">
+                    {cell.finalAnswer || ''}
+                  </MarkdownView>
+                )}
                 {/* Charts live under the insights */}
                 {charts.length > 0 && (
                   <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4">
@@ -203,15 +203,13 @@ export function NotebookCell({
             )}
 
             {view === 'code_explanation' && (
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto bg-white p-4">
                 <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Code walkthrough</span>
-                <div className="chat-markdown">
-                  {cell.codeExplanation ? (
-                    <ReactMarkdown>{cell.codeExplanation}</ReactMarkdown>
-                  ) : (
-                    <p className="text-xs text-slate-400">No code explanation yet. Ask AI to generate this cell.</p>
-                  )}
-                </div>
+                {cell.codeExplanation ? (
+                  <MarkdownView>{cell.codeExplanation}</MarkdownView>
+                ) : (
+                  <p className="text-xs text-slate-400">No code explanation yet. Ask AI to generate this cell.</p>
+                )}
               </div>
             )}
 

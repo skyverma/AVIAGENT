@@ -97,9 +97,15 @@ body {
   font-size: 12px; background: #f1f5f9; padding: 0.1rem 0.3rem; border-radius: 4px;
 }
 .chat-markdown pre {
-  background: #0f172a; color: #e2e8f0; padding: 0.75rem; border-radius: 10px;
-  overflow-x: auto; font-size: 12px;
+  background: #f8fafc; color: #334155; padding: 0.75rem; border-radius: 10px;
+  border: 1px solid #e2e8f0; overflow-x: auto; font-size: 12px;
+  white-space: pre-wrap;
 }
+.chat-markdown-pre-as-text {
+  font-size: 13.5px; line-height: 1.6; color: #334155;
+  white-space: pre-wrap;
+}
+.chat-markdown-nested { margin: 0.25rem 0; }
 .chat-markdown pre code { background: transparent; padding: 0; }
 .chat-markdown table { font-size: 12.5px; border-collapse: collapse; }
 .chat-markdown th, .chat-markdown td { border: 1px solid #e2e8f0; padding: 0.3rem 0.5rem; }
