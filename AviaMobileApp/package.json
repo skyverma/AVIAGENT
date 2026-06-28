@@ -1,0 +1,37 @@
+{
+  "name": "aviamobileapp",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "sync": "npm run build && npx cap sync android",
+    "apk": "npm run sync && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/core": "^7.2.0",
+    "@capacitor/filesystem": "^7.1.1",
+    "@capacitor/preferences": "^7.0.1",
+    "lucide-react": "^1.21.0",
+    "papaparse": "^5.5.2",
+    "pyodide": "^0.26.4",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.2.0",
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/papaparse": "^5.3.15",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.3.1",
+    "typescript": "~5.8.2",
+    "vite": "^8.0.12"
+  }
+}

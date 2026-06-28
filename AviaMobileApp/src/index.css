@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  --color-qm-blue: #458ee2;
+  --color-qm-navy: #2c3e50;
+  --color-qm-green: #41c185;
+  --color-qm-bg: #f0f4f8;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  height: 100dvh;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  height: 100dvh;
+  font-family: var(--font-sans);
+  background: var(--color-qm-bg);
+  color: #334155;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+#root {
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.safe-top { padding-top: max(env(safe-area-inset-top, 0px), 8px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+.app-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+.thinking-dot {
+  width: 7px; height: 7px; border-radius: 9999px;
+  background: var(--color-qm-blue);
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+
+.touch-btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.composer-bar {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+}
